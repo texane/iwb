@@ -68,8 +68,9 @@ tni_error_t tni_fini(tni_state_t* s)
 tni_error_t tni_get_coords
 (
  tni_state_t* s,
- const unsigned int dims[2],
- unsigned int coords[2]
+ const int dims[2],
+ int coords[2],
+ int* is_pointer_on
 )
 {
   /* s is the initialized tni state
@@ -103,8 +104,9 @@ int main(int ac, char** av)
   tni_state_t state;
   tni_conf_t conf;
   tni_error_t err;
-  unsigned int coords[2];
-  unsigned int dims[2];
+  int is_on;
+  int coords[2];
+  int dims[2];
 
   tni_load_conf(&conf, av[0]);
 
@@ -116,9 +118,9 @@ int main(int ac, char** av)
 
   while (1)
   {
-    /* TODO: sleep */
-    tni_get_coords(&state, dims, coords);
-    printf("%u,%u\n", coords[0], coords[1]);
+    tni_get_next_frame(&state);
+    tni_get_coords(&state, dims, coords, &is_on);
+    printf("%d,%d,%d\n", is_on, coords[0], coords[1]);
   }
 
   tni_fini(&state);
