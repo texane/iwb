@@ -1,0 +1,5 @@
+[ panel markers ]
+must be visible by the webcam with IR filter -> use IR leds too
+the stylus is always inside the bounding box made by the markers
+TODO: use normal in picture dots instead of IR to test
+TODO: buy IR leds at OM electronics
