@@ -107,8 +107,9 @@ iwb_error_t iwb_set_window_geometry
   return IWB_ERR_UNIMPL;
 }
 
-iwb_error_t iwb_reset_calib_matrix(iwb_state_t* s)
+iwb_error_t iwb_reset_calib(iwb_state_t* s)
 {
+  /* delete the calibration points */
   /* set the calibration to identity */
 
   return IWB_ERR_UNIMPL;
