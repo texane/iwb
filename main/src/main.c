@@ -68,7 +68,6 @@ tni_error_t tni_fini(tni_state_t* s)
 tni_error_t tni_get_coords
 (
  tni_state_t* s,
- const int dims[2],
  int coords[2],
  int* is_pointer_on
 )
@@ -76,13 +75,9 @@ tni_error_t tni_get_coords
   /* s is the initialized tni state
    */
 
-  /* dims (width, height) is the current UI surface
-     dimensions it is needed to map from the physical
-     space to the virtual panel space.
-   */
-
   /* coords (x, y) is the resulting pointer coordinate
-     in the virtual panel.
+     according to windows geometry (or screen if window
+     geometry not present).
    */
 
   /* algorithm:
@@ -98,6 +93,17 @@ tni_error_t tni_get_coords
   return TNI_ERR_UNIMPL;
 }
 
+tni_error_t tni_set_window_geometry
+(
+ tni_state_t* s,
+ int origin[2],
+ int size_in_pixels[2],
+ double size_in_user_units[2]
+)
+{
+  /* set the window geometry for get_coords translation
+   */
+}
 
 int main(int ac, char** av)
 {
