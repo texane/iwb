@@ -19,7 +19,181 @@ typedef struct calib_data
   CvMat* rot_vec;
   CvMat* rot_mat;
   CvMat* trans_vec;
+
+  double a1;
+  double b1;
+  double c1;
+  double a2;
+  double b2;
+  double c2;
+  double a3;
+  double b3;
+
 } calib_data_t;
+
+
+typedef struct point2d
+{
+  double x;
+  double y;
+} point2d_t;
+
+
+static void get_coord_jochenz
+(
+ calib_data_t* calib,
+ int im_x, int im_y,
+ int* corr_x, int* corr_y
+)
+{
+  /* from equation at http://www.zaunert.de/jochenz/wii:
+     corrected_x = (a1 * x + b1 * y + c1) / (a3 * x + b3 * y + 1);
+     corrected_y = (a2 * x + b2 * y + c2) / (a3 * x + b3 * y + 1);
+  */
+
+  const double X = (double)im_x;
+  const double Y = (double)im_y;
+
+  const double a1 = calib->a1;
+  const double a2 = calib->a2;
+  const double a3 = calib->a3;
+  const double b1 = calib->b1;
+  const double b2 = calib->b2;
+  const double b3 = calib->b3;
+  const double c1 = calib->c1;
+  const double c2 = calib->c2;
+
+  const double corrX = (a1 * X + b1 * Y + c1 ) / (a3 * X + b3 * Y + 1);
+  const double corrY = (a2 * X + b2 * Y + c2 ) / (a3 * X + b3 * Y + 1);
+
+  *corr_x = (int)corrX;
+  *corr_y = (int)corrY;
+}
+
+static void calibrate_jochenz
+(
+ calib_data_t* calib,
+ const point2d_t* dots,
+ const point2d_t* cal
+)
+{
+  double matrix[8][8] =
+  {
+    { -1, -1, -1, -1, 0, 0, 0, 0 },
+    { -cal[0].x, -cal[1].x, -cal[2].x, -cal[3].x, 0, 0, 0, 0 },
+    { -cal[0].y, -cal[1].y, -cal[2].y, -cal[3].y, 0,0,0,0 },
+    { 0,0,0,0,-1,-1,-1,-1 },
+    { 0,0,0,0, -cal[0].x, -cal[1].x, -cal[2].x, -cal[3].x },
+    { 0,0,0,0, -cal[0].y, -cal[1].y, -cal[2].y, -cal[3].y },
+    { cal[0].x * dots[0].x, cal[1].x * dots[1].x, cal[2].x * dots[2].x, cal[3].x * dots[3].x, cal[0].x * dots[0].y, cal[1].x * dots[1].y, cal[2].x * dots[2].y, cal[3].x * dots[3].y },
+    { cal[0].y * dots[0].x, cal[1].y * dots[1].x, cal[2].y * dots[2].x, cal[3].y * dots[3].x, cal[0].y * dots[0].y, cal[1].y * dots[1].y, cal[2].y * dots[2].y, cal[3].y * dots[3].y },
+  };
+
+  double bb[8] =
+  {
+    -dots[0].x, -dots[1].x, -dots[2].x, -dots[3].x, -dots[0].y, -dots[1].y, -dots[2].y, -dots[3].y
+  };
+
+  unsigned int i;
+  unsigned int j;
+
+  /* gauss elimination */
+  for( j = 1; j < 4; j ++ )
+{
+
+   for( i = 1; i < 8; i ++ )
+   {
+      matrix[i][j] = - matrix[i][j] + matrix[i][0];
+   }
+   bb[j] = -bb[j] + bb[0];
+   matrix[0][j] = 0;
+
+}
+
+
+  for( i = 2; i < 8; i ++ )
+  {
+    matrix[i][2] = -matrix[i][2] / matrix[1][2] * matrix[1][1] + matrix[i][1];
+  }
+bb[2] = - bb[2] / matrix[1][2] * matrix[1][1] + bb[1];
+matrix[1][2] = 0;
+
+
+  for( i = 2; i < 8; i ++ )
+  {
+    matrix[i][3] = -matrix[i][3] / matrix[1][3] * matrix[1][1] + matrix[i][1];
+  }
+bb[3] = - bb[3] / matrix[1][3] * matrix[1][1] + bb[1];
+matrix[1][3] = 0;
+
+
+
+  for( i = 3; i < 8; i ++ )
+  {
+    matrix[i][3] = -matrix[i][3] / matrix[2][3] * matrix[2][2] + matrix[i][2];
+  }
+bb[3] = - bb[3] / matrix[2][3] * matrix[2][2] + bb[2];
+matrix[2][3] = 0;
+
+for( j = 5; j < 8; j ++ )
+{
+  for( i = 4; i < 8; i ++ )
+  {
+     matrix[i][j] = -matrix[i][j] + matrix[i][4];
+  }
+  bb[j] = -bb[j] + bb[4];
+  matrix[3][j] = 0;
+}
+
+
+for( i = 5; i < 8; i ++ )
+  {
+    matrix[i][6] = -matrix[i][6] / matrix[4][6] * matrix[4][5] + matrix[i][5];
+  }
+
+bb[6] = - bb[6] / matrix[4][6] * matrix[4][5] + bb[5];
+matrix[4][6] = 0;
+
+
+for( i = 5; i < 8; i ++ )
+  {
+    matrix[i][7] = -matrix[i][7] / matrix[4][7] * matrix[4][5] + matrix[i][5];
+  }
+bb[7] = - bb[7] / matrix[4][7] * matrix[4][5] + bb[5];
+matrix[4][7] = 0;
+
+
+for( i = 6; i < 8; i ++ )
+  {
+    matrix[i][7] = -matrix[i][7] / matrix[5][7] * matrix[5][6] + matrix[i][6];
+  }
+bb[7] = - bb[7] / matrix[5][7] * matrix[5][6] + bb[6];
+matrix[5][7] = 0;
+
+
+
+matrix[7][7] = - matrix[7][7]/matrix[6][7]*matrix[6][3] + matrix[7][3];
+bb[7] = -bb[7]/matrix[6][7]*matrix[6][3] + bb[3];
+matrix[6][7] = 0;
+
+const double b3 =  bb[7] /matrix[7][7];
+const double a3 = (bb[3]-(matrix[7][3]*b3))/matrix[6][3];
+const double b2 = (bb[6]-(matrix[7][6]*b3+matrix[6][6]*a3))/matrix[5][6];
+const double a2 = (bb[5]-(matrix[7][5]*b3+matrix[6][5]*a3+matrix[5][5]*b2))/matrix[4][5];
+const double c2 = (bb[4]-(matrix[7][4]*b3+matrix[6][5]*a3+matrix[5][4]*b2+matrix[4][4]*a2))/matrix[3][4];
+const double b1 = (bb[2]-(matrix[7][2]*b3+matrix[6][2]*a3+matrix[5][2]*b2+matrix[4][2]*a2+matrix[3][2]*c2))/matrix[2][2];
+const double a1 = (bb[1]-(matrix[7][1]*b3+matrix[6][1]*a3+matrix[5][1]*b2+matrix[4][1]*a2+matrix[3][1]*c2+matrix[2][1]*b1))/matrix[1][1];
+const double c1 = (bb[0]-(matrix[7][0]*b3+matrix[6][0]*a3+matrix[5][0]*b2+matrix[4][0]*a2+matrix[3][0]*c2+matrix[2][0]*b1+matrix[1][0]*a1))/matrix[0][0];
+
+calib->a1 = a1;
+calib->a2 = a2;
+calib->a3 = a3;
+calib->b1 = b1;
+calib->b2 = b2;
+calib->b3 = b3;
+calib->c1 = c1;
+calib->c2 = c2;
+}
 
 static int calibrate
 (
@@ -31,6 +205,8 @@ static int calibrate
  calib_data_t* calib
 )
 {
+#if 0
+
   CvMat* ob_points_mat;
   CvMat* im_points_mat;
   CvMat* counts_mat;
@@ -93,6 +269,58 @@ static int calibrate
   cvReleaseMat(&im_points_mat);
   cvReleaseMat(&counts_mat);
 
+#else
+
+#if 0
+
+  CvMat* const a = cvCreateMat(8, 8, CV_32FC1);
+  CvMat* const x = cvCreateMat(8, 1, CV_32FC1);
+  CvMat* const b = cvCreateMat(8, 1, CV_32FC1);
+
+  unsigned int i;
+
+  cvSetReal2D(a, 0, 0, );
+
+  for (i = 0; i < 8; ++i) cvSetReal2D(x, i, 0, 0);
+
+  cvSolve(&a, &b, &x);
+
+  calib->a1 = cvGetReal2D(x, 0, 0);
+  calib->b1 = cvGetReal2D(x, 1, 0);
+  calib->c1 = cvGetReal2D(x, 1, 0);
+  calib->a2 = cvGetReal2D(x, 1, 0);
+  calib->b2 = cvGetReal2D(x, 1, 0);
+  calib->c2 = cvGetReal2D(x, 1, 0);
+  calib->a3 = cvGetReal2D(x, 1, 0);
+  calib->a4 = cvGetReal2D(x, 1, 0);
+
+  cvReleaseMat(a);
+  cvReleaseMat(x);
+  cvReleaseMat(b);
+
+#else
+
+  /* assume npoints == 4 */
+
+  point2d_t dots[4];
+  point2d_t cal[4];
+  unsigned int i;
+
+  for (i = 0; i < 4; ++i)
+  {
+    dots[i].x = ob_points_arr[i * 3 + 0];
+    dots[i].y = ob_points_arr[i * 3 + 1];
+
+    cal[i].x = im_points_arr[i * 2 + 0];
+    cal[i].y = im_points_arr[i * 2 + 1];
+  }
+
+  calibrate_jochenz(calib, dots, cal);
+
+#endif
+
+#endif
+
   return 0;
 }
 
@@ -130,12 +358,21 @@ typedef struct ui_state
   unsigned int cur_npoints;
   unsigned int max_npoints;
 
+  /* calibration data */
+  calib_data_t calib;
+
   /* wb pointer */
-  unsigned int wb_x;
-  unsigned int wb_y;
+  int wb_x;
+  int wb_y;
 
 } ui_state_t;
 
+
+static inline int inverse_y(ui_state_t* ui, int y)
+{
+  /* return cvGetSize(ui->image).height - y - 1; */
+  return y;
+}
 
 static void on_mouse(int event, int x, int y, int flags, void* param)
 {
@@ -149,6 +386,8 @@ static void on_mouse(int event, int x, int y, int flags, void* param)
     if ( ! ((x >= 0) && (x < (int)ui->lsize.width))) return ;
     if ( ! ((y >= 0) || (y < (int)ui->lsize.height))) return ;
 
+    y = inverse_y(ui, y);
+
     ui->points[ui->cur_npoints * 2 + 0] = (double)x;
     ui->points[ui->cur_npoints * 2 + 1] = (double)y;
     if ((++ui->cur_npoints) == ui->max_npoints) ui->is_done = 1;
@@ -160,8 +399,15 @@ static void on_mouse(int event, int x, int y, int flags, void* param)
     if ((x < 0) || (x >= (int)ui->lsize.width)) return ;
     if ((y < 0) || (y >= (int)ui->lsize.height)) return ;
 
-    /* TODO: compute pointer coords */
-    /* TODO: refresh right ui frame */
+    y = inverse_y(ui, y);
+
+    get_coord_jochenz(&ui->calib, x, y, &ui->wb_x, &ui->wb_y);
+    if (ui->wb_x < 0) ui->wb_x = 0;
+    else if (ui->wb_x > ui->rsize.width) ui->wb_x = ui->rsize.width;
+    if (ui->wb_y < 0) ui->wb_y = 0;
+    else if (ui->wb_y > ui->rsize.height) ui->wb_y = ui->rsize.height;
+
+    printf("%d, %d -> %d, %d\n", x, y, ui->wb_x, ui->wb_y);
   }
 }
 
@@ -250,17 +496,20 @@ static int ui_run_common(ui_state_t* ui)
       else if ((x + 3) > ui->lsize.width) x = ui->lsize.width - 3;
       if ((y - 3) < 0) y = 3;
       else if ((y + 3) > ui->lsize.height) y = ui->lsize.height - 3;
-      points[0] = cvPoint(x - 3, y - 3);
-      points[1] = cvPoint(x + 3, y + 3);
+      points[0] = cvPoint(x - 3, inverse_y(ui, y - 3));
+      points[1] = cvPoint(x + 3, inverse_y(ui, y + 3));
       cvRectangle(ui->image, points[0], points[1], blue, CV_FILLED, 8, 0);
     }
 
-    /* redraw whitebaord and pointer */
-    points[0] = cvPoint(ui->lsize.width, 0);
-    points[1] = cvPoint(ui->lsize.width + ui->rsize.width, ui->rsize.height);
+    /* redraw whitebaord */
+    points[0] = cvPoint(ui->lsize.width, inverse_y(ui, 0));
+    points[1] = cvPoint
+      (points[0].x + ui->rsize.width - 1, inverse_y(ui, ui->rsize.height) - 1);
     cvRectangle(ui->image, points[0], points[1], white, CV_FILLED, 8, 0);
-    points[0] = cvPoint(ui->lsize.width + ui->wb_x - 2, ui->wb_y - 2);
-    points[1] = cvPoint(points[0].x + 2, points[0].y + 2);
+
+    /* redraw the pointer */
+    points[0] = cvPoint(ui->lsize.width + ui->wb_x - 2, inverse_y(ui, ui->wb_y - 2));
+    points[1] = cvPoint(points[0].x + 2, inverse_y(ui, ui->wb_y + 2));
     cvRectangle(ui->image, points[0], points[1], blue, CV_FILLED, 8, 0);
 
     /* refresh image */
@@ -283,7 +532,6 @@ static int ui_run_calibration(ui_state_t* ui)
 
   double ob_points[npoints * 3];
   double im_points[npoints * 2];
-  calib_data_t calib;
 
   ui->is_calib = 1;
 
@@ -320,7 +568,7 @@ static int ui_run_calibration(ui_state_t* ui)
   ob_points[3 * 3 + 2] = 0;
 
   /* calibrate */
-  calibrate(ob_points, im_points, npoints, im_width, im_height, &calib);
+  calibrate(ob_points, im_points, npoints, im_width, im_height, &ui->calib);
 
   return 0;
 }
