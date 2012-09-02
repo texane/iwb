@@ -14,12 +14,6 @@
 
 typedef struct calib_data
 {
-  CvMat* cam_mat;
-  CvMat* dist_mat;
-  CvMat* rot_vec;
-  CvMat* rot_mat;
-  CvMat* trans_vec;
-
   double a1;
   double b1;
   double c1;
@@ -32,14 +26,7 @@ typedef struct calib_data
 } calib_data_t;
 
 
-typedef struct point2d
-{
-  double x;
-  double y;
-} point2d_t;
-
-
-static void get_coord_jochenz
+static void get_corrected_coords
 (
  calib_data_t* calib,
  int im_x, int im_y,
@@ -47,12 +34,12 @@ static void get_coord_jochenz
 )
 {
   /* from equation at http://www.zaunert.de/jochenz/wii:
-     corrected_x = (a1 * x + b1 * y + c1) / (a3 * x + b3 * y + 1);
-     corrected_y = (a2 * x + b2 * y + c2) / (a3 * x + b3 * y + 1);
+     corr_x = (a1 * x + b1 * y + c1) / (a3 * x + b3 * y + 1);
+     corr_y = (a2 * x + b2 * y + c2) / (a3 * x + b3 * y + 1);
   */
 
-  const double X = (double)im_x;
-  const double Y = (double)im_y;
+  const double x = (double)im_x;
+  const double y = (double)im_y;
 
   const double a1 = calib->a1;
   const double a2 = calib->a2;
@@ -63,139 +50,19 @@ static void get_coord_jochenz
   const double c1 = calib->c1;
   const double c2 = calib->c2;
 
-  const double corrX = (a1 * X + b1 * Y + c1 ) / (a3 * X + b3 * Y + 1);
-  const double corrY = (a2 * X + b2 * Y + c2 ) / (a3 * X + b3 * Y + 1);
-
-  *corr_x = (int)corrX;
-  *corr_y = (int)corrY;
+  *corr_x = (int)((a1 * x + b1 * y + c1 ) / (a3 * x + b3 * y + 1));
+  *corr_y = (int)((a2 * x + b2 * y + c2 ) / (a3 * x + b3 * y + 1));
 }
 
-/* TODO: remove */
-__attribute__((unused))
-static void calibrate_jochenz
-(calib_data_t* calib, const point2d_t* dots, const point2d_t* cal)
-{
-  double matrix[8][8] =
-  {
-    { -1, -1, -1, -1, 0, 0, 0, 0 },
-    { -cal[0].x, -cal[1].x, -cal[2].x, -cal[3].x, 0, 0, 0, 0 },
-    { -cal[0].y, -cal[1].y, -cal[2].y, -cal[3].y, 0,0,0,0 },
-    { 0,0,0,0,-1,-1,-1,-1 },
-    { 0,0,0,0, -cal[0].x, -cal[1].x, -cal[2].x, -cal[3].x },
-    { 0,0,0,0, -cal[0].y, -cal[1].y, -cal[2].y, -cal[3].y },
-    { cal[0].x * dots[0].x, cal[1].x * dots[1].x, cal[2].x * dots[2].x, cal[3].x * dots[3].x, cal[0].x * dots[0].y, cal[1].x * dots[1].y, cal[2].x * dots[2].y, cal[3].x * dots[3].y },
-    { cal[0].y * dots[0].x, cal[1].y * dots[1].x, cal[2].y * dots[2].x, cal[3].y * dots[3].x, cal[0].y * dots[0].y, cal[1].y * dots[1].y, cal[2].y * dots[2].y, cal[3].y * dots[3].y },
-  };
-
-  double bb[8] =
-  {
-    -dots[0].x, -dots[1].x, -dots[2].x, -dots[3].x, -dots[0].y, -dots[1].y, -dots[2].y, -dots[3].y
-  };
-
-  unsigned int i;
-  unsigned int j;
-
-  /* gauss elimination */
-  for( j = 1; j < 4; j ++ )
-{
-
-   for( i = 1; i < 8; i ++ )
-   {
-      matrix[i][j] = - matrix[i][j] + matrix[i][0];
-   }
-   bb[j] = -bb[j] + bb[0];
-   matrix[0][j] = 0;
-
-}
-
-
-  for( i = 2; i < 8; i ++ )
-  {
-    matrix[i][2] = -matrix[i][2] / matrix[1][2] * matrix[1][1] + matrix[i][1];
-  }
-bb[2] = - bb[2] / matrix[1][2] * matrix[1][1] + bb[1];
-matrix[1][2] = 0;
-
-
-  for( i = 2; i < 8; i ++ )
-  {
-    matrix[i][3] = -matrix[i][3] / matrix[1][3] * matrix[1][1] + matrix[i][1];
-  }
-bb[3] = - bb[3] / matrix[1][3] * matrix[1][1] + bb[1];
-matrix[1][3] = 0;
-
-
-
-  for( i = 3; i < 8; i ++ )
-  {
-    matrix[i][3] = -matrix[i][3] / matrix[2][3] * matrix[2][2] + matrix[i][2];
-  }
-bb[3] = - bb[3] / matrix[2][3] * matrix[2][2] + bb[2];
-matrix[2][3] = 0;
-
-for( j = 5; j < 8; j ++ )
-{
-  for( i = 4; i < 8; i ++ )
-  {
-     matrix[i][j] = -matrix[i][j] + matrix[i][4];
-  }
-  bb[j] = -bb[j] + bb[4];
-  matrix[3][j] = 0;
-}
-
-
-for( i = 5; i < 8; i ++ )
-  {
-    matrix[i][6] = -matrix[i][6] / matrix[4][6] * matrix[4][5] + matrix[i][5];
-  }
-
-bb[6] = - bb[6] / matrix[4][6] * matrix[4][5] + bb[5];
-matrix[4][6] = 0;
-
-
-for( i = 5; i < 8; i ++ )
-  {
-    matrix[i][7] = -matrix[i][7] / matrix[4][7] * matrix[4][5] + matrix[i][5];
-  }
-bb[7] = - bb[7] / matrix[4][7] * matrix[4][5] + bb[5];
-matrix[4][7] = 0;
-
-
-for( i = 6; i < 8; i ++ )
-  {
-    matrix[i][7] = -matrix[i][7] / matrix[5][7] * matrix[5][6] + matrix[i][6];
-  }
-bb[7] = - bb[7] / matrix[5][7] * matrix[5][6] + bb[6];
-matrix[5][7] = 0;
-
-
-
-matrix[7][7] = - matrix[7][7]/matrix[6][7]*matrix[6][3] + matrix[7][3];
-bb[7] = -bb[7]/matrix[6][7]*matrix[6][3] + bb[3];
-matrix[6][7] = 0;
-
-const double b3 =  bb[7] /matrix[7][7];
-const double a3 = (bb[3]-(matrix[7][3]*b3))/matrix[6][3];
-const double b2 = (bb[6]-(matrix[7][6]*b3+matrix[6][6]*a3))/matrix[5][6];
-const double a2 = (bb[5]-(matrix[7][5]*b3+matrix[6][5]*a3+matrix[5][5]*b2))/matrix[4][5];
-const double c2 = (bb[4]-(matrix[7][4]*b3+matrix[6][4]*a3+matrix[5][4]*b2+matrix[4][4]*a2))/matrix[3][4];
-const double b1 = (bb[2]-(matrix[7][2]*b3+matrix[6][2]*a3+matrix[5][2]*b2+matrix[4][2]*a2+matrix[3][2]*c2))/matrix[2][2];
-const double a1 = (bb[1]-(matrix[7][1]*b3+matrix[6][1]*a3+matrix[5][1]*b2+matrix[4][1]*a2+matrix[3][1]*c2+matrix[2][1]*b1))/matrix[1][1];
-const double c1 = (bb[0]-(matrix[7][0]*b3+matrix[6][0]*a3+matrix[5][0]*b2+matrix[4][0]*a2+matrix[3][0]*c2+matrix[2][0]*b1+matrix[1][0]*a1))/matrix[0][0];
-
-calib->a1 = a1;
-calib->a2 = a2;
-calib->a3 = a3;
-calib->b1 = b1;
-calib->b2 = b2;
-calib->b3 = b3;
-calib->c1 = c1;
-calib->c2 = c2;
-}
-
-
-static void calibrate_lementec
-(calib_data_t* calib, const double* ob_points_arr, const double* im_points_arr)
+static int calibrate
+(
+ const double* ob_points_arr, /* 3 * npoints */
+ const double* im_points_arr, /* 2 * npoints */
+ unsigned int npoints,
+ unsigned int im_width,
+ unsigned int im_height,
+ calib_data_t* calib
+)
 {
   CvMat* a;
   CvMat* x;
@@ -256,107 +123,6 @@ static void calibrate_lementec
   cvReleaseMat(&a);
   cvReleaseMat(&x);
   cvReleaseMat(&b);
-}
-
-
-static int calibrate
-(
- const double* ob_points_arr, /* 3 * npoints */
- const double* im_points_arr, /* 2 * npoints */
- unsigned int npoints,
- unsigned int im_width,
- unsigned int im_height,
- calib_data_t* calib
-)
-{
-#if 0
-
-  CvMat* ob_points_mat;
-  CvMat* im_points_mat;
-  CvMat* counts_mat;
-  CvSize im_size;
-  unsigned int i;
-  unsigned int j;
-
-  ob_points_mat = cvCreateMat(npoints, 3, CV_32F);
-  for (i = 0; i < npoints; ++i)
-  {
-    for (j = 0; j < 3; ++j)
-    {
-      const unsigned int k = i * 3 + j;
-      cvSetReal2D(ob_points_mat, i, j, ob_points_arr[k]);
-    }
-  }
-
-  im_points_mat = cvCreateMat(npoints, 2, CV_32F);
-  for (i = 0; i < npoints; ++i)
-  {
-    for (j = 0; j < 2; ++j)
-    {
-      const unsigned int k = i * 2 + j;
-      cvSetReal2D(im_points_mat, i, j, im_points_arr[k]);
-    }
-  }
-
-  counts_mat = cvCreateMat(1, 1, CV_32S);
-  cvSetReal2D(counts_mat, 0, 0, (double)npoints);
-
-  im_size = cvSize((int)im_width, (int)im_height);
-
-  calib->cam_mat = cvCreateMat(3, 3, CV_32F);
-  calib->dist_mat = cvCreateMat(1, 5, CV_32F);
-  calib->rot_vec = cvCreateMat(1, 3, CV_32F);
-  calib->trans_vec = cvCreateMat(1, 3, CV_32F);
-
-  /* initialize intrinsic so focal length have 1.0 ratio */
-  cvSetReal2D(calib->cam_mat, 0, 0, 1.0);
-  cvSetReal2D(calib->cam_mat, 1, 1, 1.0);
-
-  cvCalibrateCamera2
-  (
-   ob_points_mat,
-   im_points_mat,
-   counts_mat,
-   im_size,
-   calib->cam_mat,
-   calib->dist_mat,
-   calib->rot_vec,
-   calib->trans_vec,
-   CV_CALIB_FIX_ASPECT_RATIO
-  );
-
-  /* turn into matrix */
-  calib->rot_mat = cvCreateMat(3, 3, CV_32F);
-  cvRodrigues2(calib->rot_vec, calib->rot_mat, NULL);
-  
-  cvReleaseMat(&ob_points_mat);
-  cvReleaseMat(&im_points_mat);
-  cvReleaseMat(&counts_mat);
-
-#else
-
-#if 0
-  /* assume npoints == 4 */
-
-  point2d_t dots[4];
-  point2d_t cal[4];
-  unsigned int i;
-
-  for (i = 0; i < 4; ++i)
-  {
-    dots[i].x = ob_points_arr[i * 3 + 0];
-    dots[i].y = ob_points_arr[i * 3 + 1];
-
-    cal[i].x = im_points_arr[i * 2 + 0];
-    cal[i].y = im_points_arr[i * 2 + 1];
-  }
-
-  calibrate_jochenz(calib, dots, cal);
-#else
-  calibrate_lementec(calib, ob_points_arr, im_points_arr);
-#endif
-
-#endif
 
   return 0;
 }
@@ -438,7 +204,7 @@ static void on_mouse(int event, int x, int y, int flags, void* param)
 
     y = inverse_y(ui, y);
 
-    get_coord_jochenz(&ui->calib, x, y, &ui->wb_x, &ui->wb_y);
+    get_corrected_coords(&ui->calib, x, y, &ui->wb_x, &ui->wb_y);
     if (ui->wb_x < 0) ui->wb_x = 0;
     else if (ui->wb_x > ui->rsize.width) ui->wb_x = ui->rsize.width;
     if (ui->wb_y < 0) ui->wb_y = 0;
