@@ -370,8 +370,8 @@ typedef struct ui_state
 
 static inline int inverse_y(ui_state_t* ui, int y)
 {
-  /* return cvGetSize(ui->image).height - y - 1; */
-  return y;
+  return cvGetSize(ui->image).height - y - 1;
+  /* return y; */
 }
 
 static void on_mouse(int event, int x, int y, int flags, void* param)
