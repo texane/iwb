@@ -70,12 +70,10 @@ static void get_coord_jochenz
   *corr_y = (int)corrY;
 }
 
+/* TODO: remove */
+__attribute__((unused))
 static void calibrate_jochenz
-(
- calib_data_t* calib,
- const point2d_t* dots,
- const point2d_t* cal
-)
+(calib_data_t* calib, const point2d_t* dots, const point2d_t* cal)
 {
   double matrix[8][8] =
   {
@@ -195,6 +193,72 @@ calib->c1 = c1;
 calib->c2 = c2;
 }
 
+
+static void calibrate_lementec
+(calib_data_t* calib, const double* ob_points_arr, const double* im_points_arr)
+{
+  CvMat* a;
+  CvMat* x;
+  CvMat* b;
+
+  unsigned int i;
+
+  a = cvCreateMat(8, 8, CV_32FC1);
+  x = cvCreateMat(8, 1, CV_32FC1);
+  b = cvCreateMat(8, 1, CV_32FC1);
+
+  for (i = 0; i < 4; ++i)
+  {
+    const double obx = ob_points_arr[i * 3 + 0];
+    const double oby = ob_points_arr[i * 3 + 1];
+    const double imx = im_points_arr[i * 2 + 0];
+    const double imy = im_points_arr[i * 2 + 1];
+
+    /* fill a, the coefficient matrix */
+
+    /* first equation, xcor = ... */
+    cvSetReal2D(a, i * 2 + 0, 0, imx);
+    cvSetReal2D(a, i * 2 + 0, 1, imy);
+    cvSetReal2D(a, i * 2 + 0, 2, 1);
+    cvSetReal2D(a, i * 2 + 0, 3, 0);
+    cvSetReal2D(a, i * 2 + 0, 4, 0);
+    cvSetReal2D(a, i * 2 + 0, 5, 0);
+    cvSetReal2D(a, i * 2 + 0, 6, -1 * obx * imx);
+    cvSetReal2D(a, i * 2 + 0, 7, -1 * obx * imy);
+
+    /* second equation, ycor = ... */
+    cvSetReal2D(a, i * 2 + 1, 0, 0);
+    cvSetReal2D(a, i * 2 + 1, 1, 0);
+    cvSetReal2D(a, i * 2 + 1, 2, 0);
+    cvSetReal2D(a, i * 2 + 1, 3, imx);
+    cvSetReal2D(a, i * 2 + 1, 4, imy);
+    cvSetReal2D(a, i * 2 + 1, 5, 1);
+    cvSetReal2D(a, i * 2 + 1, 6, -1 * oby * imx);
+    cvSetReal2D(a, i * 2 + 1, 7, -1 * oby * imy);
+
+    /* fill b, the result matrix */
+    cvSetReal2D(b, i * 2 + 0, 0, obx);
+    cvSetReal2D(b, i * 2 + 1, 0, oby);
+  }
+
+  /* solve the system */
+  cvSolve(a, b, x, CV_LU);
+
+  calib->a1 = cvGetReal2D(x, 0, 0);
+  calib->b1 = cvGetReal2D(x, 1, 0);
+  calib->c1 = cvGetReal2D(x, 2, 0);
+  calib->a2 = cvGetReal2D(x, 3, 0);
+  calib->b2 = cvGetReal2D(x, 4, 0);
+  calib->c2 = cvGetReal2D(x, 5, 0);
+  calib->a3 = cvGetReal2D(x, 6, 0);
+  calib->b3 = cvGetReal2D(x, 7, 0);
+
+  cvReleaseMat(&a);
+  cvReleaseMat(&x);
+  cvReleaseMat(&b);
+}
+
+
 static int calibrate
 (
  const double* ob_points_arr, /* 3 * npoints */
@@ -272,34 +336,6 @@ static int calibrate
 #else
 
 #if 0
-
-  CvMat* const a = cvCreateMat(8, 8, CV_32FC1);
-  CvMat* const x = cvCreateMat(8, 1, CV_32FC1);
-  CvMat* const b = cvCreateMat(8, 1, CV_32FC1);
-
-  unsigned int i;
-
-  cvSetReal2D(a, 0, 0, );
-
-  for (i = 0; i < 8; ++i) cvSetReal2D(x, i, 0, 0);
-
-  cvSolve(&a, &b, &x);
-
-  calib->a1 = cvGetReal2D(x, 0, 0);
-  calib->b1 = cvGetReal2D(x, 1, 0);
-  calib->c1 = cvGetReal2D(x, 1, 0);
-  calib->a2 = cvGetReal2D(x, 1, 0);
-  calib->b2 = cvGetReal2D(x, 1, 0);
-  calib->c2 = cvGetReal2D(x, 1, 0);
-  calib->a3 = cvGetReal2D(x, 1, 0);
-  calib->a4 = cvGetReal2D(x, 1, 0);
-
-  cvReleaseMat(a);
-  cvReleaseMat(x);
-  cvReleaseMat(b);
-
-#else
-
   /* assume npoints == 4 */
 
   point2d_t dots[4];
@@ -316,7 +352,8 @@ static int calibrate
   }
 
   calibrate_jochenz(calib, dots, cal);
-
+#else
+  calibrate_lementec(calib, ob_points_arr, im_points_arr);
 #endif
 
 #endif
