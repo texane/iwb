@@ -110,7 +110,7 @@ iwb_error_t iwb_calib_reset
 );
 
 
-iwb_errort iwb_calib_add_point
+iwb_error_t iwb_calib_add_point
 (
  iwb_state_t* state,
  int cam_coords[2],

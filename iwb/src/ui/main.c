@@ -70,6 +70,11 @@ static int calibrate
 
   unsigned int i;
 
+  /* Unused parameters. */
+  (void) npoints;
+  (void) im_width;
+  (void) im_height;
+
   a = cvCreateMat(8, 8, CV_32FC1);
   x = cvCreateMat(8, 1, CV_32FC1);
   b = cvCreateMat(8, 1, CV_32FC1);
@@ -295,10 +300,10 @@ static int ui_run_common(ui_state_t* ui)
     {
       x = ui->points[i * 2 + 0];
       y = ui->points[i * 2 + 1];
-      if ((x - 3) < 0) x = 3;
-      else if ((x + 3) > ui->lsize.width) x = ui->lsize.width - 3;
-      if ((y - 3) < 0) y = 3;
-      else if ((y + 3) > ui->lsize.height) y = ui->lsize.height - 3;
+      if (x < 3) x = 3;
+      else if (((int)x + 3) > ui->lsize.width) x = ui->lsize.width - 3;
+      if (y < 3) y = 3;
+      else if (((int)y + 3) > ui->lsize.height) y = ui->lsize.height - 3;
       points[0] = cvPoint(x - 3, inverse_y(ui, y - 3));
       points[1] = cvPoint(x + 3, inverse_y(ui, y + 3));
       cvRectangle(ui->image, points[0], points[1], blue, CV_FILLED, 8, 0);
@@ -382,11 +387,11 @@ static int ui_run_whiteboard(ui_state_t* ui)
   return ui_run_common(ui);
 }
 
-int main(int ac, char** av)
+int main(void)
 {
   static const unsigned int wb_width = 400;
   static const unsigned int wb_height = 400;
-  static const unsigned int cam_index = 1; /* second webcam */
+  static const unsigned int cam_index = 0; /* first webcam */
 
   ui_state_t ui;
 
